@@ -14,20 +14,44 @@ export function ProfileForm({ profile, setProfile }) {
       defaultedLoans: 0
     });
     const [loading, setLoading] = useState(false);
-    const [weatherData, setWeatherData] = useState(null);
-    const [prediction, setPrediction] = useState(null);
+    type Prediction = {
+      creditScore: number;
+      interestRate: number;
+      loanLimit: number;
+      loanDuration: number;
+      confidence: string;
+      riskLevel: 'Low' | 'Medium' | 'High';
+    };
+    
+    const [prediction, setPrediction] = useState<Prediction | null>(null);
+    
+    const [weatherData, setWeatherData] = useState<{
+      ndvi: number;
+      rainfall: number;
+      temperature: number;
+    } | null>(null);
+    
+    
   
     const handleSubmit = async (e) => {
       e.preventDefault();
       setLoading(true);
-  
+    
       try {
-        // Get weather data
-        const weather = await API.getWeatherData(formData.location);
+        // Step 1: Simulate weather (hardcoded or based on location)
+        const weather = {
+          ndvi: 0.78,           // vegetation index (0–1)
+          rainfall: 120,        // mm per month
+          temperature: 25.4,    // °C average
+        };
+    
         setWeatherData(weather);
-  
-        // Get credit score prediction
-        const predictionData = await API.predictCreditScore({
+    
+        // Optional: simulate AI processing delay
+        await new Promise((res) => setTimeout(res, 1000));
+    
+        // Step 2: Simulate model inference (replaces API call)
+        const predictionData = simulateCreditDecision({
           location: formData.location,
           ndvi: weather.ndvi,
           avg_rainfall: weather.rainfall,
@@ -36,31 +60,92 @@ export function ProfileForm({ profile, setProfile }) {
           farm_size: formData.farmSize,
           previous_loans_count: formData.previousLoans,
           defaulted_loans_count: formData.defaultedLoans,
-          crop_yield_per_sqm: formData.cropYield || 5
+          crop_yield_per_sqm: formData.cropYield || 5,
         });
-  
+    
+        // Step 3: Save to state
         setPrediction(predictionData);
-  
+    
+        // Step 4: Update farmer profile
         const updatedProfile = {
           ...formData,
-          creditScore: predictionData.credit_score,
-          interestRate: predictionData.interest_rate,
-          loanLimit: predictionData.loan_limit,
-          loanDuration: predictionData.loan_duration,
-          riskLevel: predictionData.risk_level,
+          creditScore: predictionData.creditScore,
+          interestRate: predictionData.interestRate,
+          loanLimit: predictionData.loanLimit,
+          loanDuration: predictionData.loanDuration,
+          riskLevel: predictionData.riskLevel,
           ndvi: weather.ndvi,
           rainfall: weather.rainfall,
-          temperature: weather.temperature
+          temperature: weather.temperature,
         };
-  
-        setProfile(updatedProfile);
-        localStorage.setItem('farmerProfile', JSON.stringify(updatedProfile));
+    
+        localStorage.setItem("farmerProfile", JSON.stringify(updatedProfile));
       } catch (error) {
-        alert('Error processing profile: ' + error.message);
+        console.error("Error simulating prediction:", error);
       } finally {
         setLoading(false);
       }
     };
+    function simulateCreditDecision(data) {
+  const {
+    ndvi,
+    avg_rainfall,
+    avg_temp,
+    crop_type,
+    farm_size,
+    previous_loans_count,
+    defaulted_loans_count,
+    crop_yield_per_sqm,
+  } = data;
+
+  // --- Step 1: Compute a pseudo credit score ---
+  let score = 600;
+  score += ndvi * 120;
+  score += (avg_rainfall - 60) * 0.3;
+  score -= Math.abs(avg_temp - 25) * 1.5;
+  score += crop_yield_per_sqm * 2;
+  score += farm_size * 0.8;
+  score -= previous_loans_count * 5;
+  score -= defaulted_loans_count * 50;
+
+  // clamp between 300–850
+  score = Math.round(Math.min(850, Math.max(300, score)));
+
+  // --- Step 2: Determine interest rate (in % per year) ---
+  let interestRate;
+  if (score >= 750) interestRate = 8;
+  else if (score >= 650) interestRate = 12;
+  else if (score >= 550) interestRate = 16;
+  else interestRate = 20;
+
+  let loanLimit = Number((farm_size * crop_yield_per_sqm * ndvi * 500).toFixed(0));
+  loanLimit = Math.max(20000, Math.min(loanLimit, 500000)); // clamp
+  
+  
+
+  // --- Step 4: Determine loan duration (months) ---
+  let loanDuration;
+  if (score >= 700) loanDuration = 12;
+  else if (score >= 600) loanDuration = 9;
+  else loanDuration = 6;
+
+  // --- Step 5: Add confidence score (just for realism) ---
+  const confidence = (Math.random() * 0.1 + 0.9).toFixed(2);
+  const riskLevel =
+  score >= 750 ? 'Low' :
+  score >= 600 ? 'Medium' :
+  'High';
+
+  return {
+    creditScore: score,
+    interestRate,
+    loanLimit: Number(loanLimit),
+    loanDuration,
+    confidence,
+    riskLevel
+  };
+}
+
   
     return (
       <div className="max-w-3xl mx-auto">
@@ -239,29 +324,29 @@ export function ProfileForm({ profile, setProfile }) {
                   <div className="flex items-center justify-between">
                     <span className="text-gray-600">Credit Score</span>
                     <span className="font-bold text-xl text-green-600">
-                      {prediction.credit_score}
+                      {prediction.creditScore}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-600">Interest Rate</span>
-                    <span className="font-semibold">{prediction.interest_rate}%</span>
+                    <span className="font-semibold">{prediction.interestRate}%</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-600">Max Loan</span>
                     <span className="font-semibold">
-                      KSh {prediction.loan_limit.toLocaleString()}
+                      KSh {prediction.loanLimit.toLocaleString()}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-600">Risk Level</span>
                     <span className={`font-semibold ${
-                      prediction.risk_level === 'Low' 
+                      prediction.riskLevel === 'Low' 
                         ? 'text-green-600' 
-                        : prediction.risk_level === 'Medium' 
+                        : prediction.riskLevel === 'Medium' 
                         ? 'text-yellow-600' 
                         : 'text-red-600'
                     }`}>
-                      {prediction.risk_level}
+                      {prediction.riskLevel}
                     </span>
                   </div>
                 </div>
